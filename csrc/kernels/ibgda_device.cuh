@@ -11,7 +11,11 @@
 
 #include "configs.cuh"
 #include "exception.cuh"
+#ifdef ENABLE_FAKE_DEP
+#include "utils_fake_dep.cuh"
+#else
 #include "utils.cuh"
+#endif
 
 namespace deep_ep {
 
