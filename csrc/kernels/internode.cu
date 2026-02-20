@@ -6,7 +6,11 @@
 #include "exception.cuh"
 #include "ibgda_device.cuh"
 #include "launch.cuh"
+#ifdef ENABLE_FAKE_DEP
+#include "utils_fake_dep.cuh"
+#else
 #include "utils.cuh"
+#endif
 
 namespace deep_ep {
 
@@ -859,8 +863,8 @@ __global__ void __launch_bounds__(((kNumDispatchRDMASenderWarps + 1 + NUM_MAX_NV
                     // Notify NVL ranks
                     int start_sum = -meta_0 - 1, end_sum = -meta_1 - 1;
                     EP_DEVICE_ASSERT(start_sum >= 0 and end_sum >= 0 and end_sum >= start_sum);
-                    st_relaxed_sys_global(nvl_channel_prefix_start.buffer() + lane_id, -start_sum - 1);
-                    st_relaxed_sys_global(nvl_channel_prefix_end.buffer() + lane_id, -end_sum - 1);
+                    st_relaxed_sys_global(nvl_channel_prefix_start.buffer() + lane_id, -start_sum - 1, EP_FAKE_DEP(-start_sum - 1));
+                    st_relaxed_sys_global(nvl_channel_prefix_end.buffer() + lane_id, -end_sum - 1, EP_FAKE_DEP(-end_sum - 1));
 
                     // Save RDMA channel received token count
                     src_rdma_channel_prefix = -meta_2 - 1;
@@ -1186,7 +1190,7 @@ __global__ void __launch_bounds__(((kNumDispatchRDMASenderWarps + 1 + NUM_MAX_NV
 
             // Move queue
             if (elect_one_sync())
-                st_relaxed_sys_global(nvl_channel_head.buffer(), cached_channel_head_idx);
+                st_relaxed_sys_global(nvl_channel_head.buffer(), cached_channel_head_idx, EP_FAKE_DEP(cached_channel_head_idx));
         }
     }
 
@@ -2264,7 +2268,7 @@ __global__ void __launch_bounds__((kNumForwarders + 1) * 32, 1) combine(int4* co
                             if (not forwarder_retired[i * num_warps_per_rdma_rank + j])
                                 min_head = min(min_head, forwarder_nvl_head[i * num_warps_per_rdma_rank + j][dst_nvl_rank]);
                         if (min_head != std::numeric_limits<int>::max() and min_head > last_nvl_head[i] and lane_id < NUM_MAX_NVL_PEERS)
-                            st_relaxed_sys_global(nvl_channel_head.buffer_by(dst_nvl_rank) + i, last_nvl_head[i] = min_head);
+                            st_relaxed_sys_global(nvl_channel_head.buffer_by(dst_nvl_rank) + i, last_nvl_head[i] = min_head, EP_FAKE_DEP(min_head));
                     }
                 }
 

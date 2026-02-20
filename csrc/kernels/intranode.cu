@@ -2,7 +2,11 @@
 #include "configs.cuh"
 #include "exception.cuh"
 #include "launch.cuh"
+#ifdef ENABLE_FAKE_DEP
+#include "utils_fake_dep.cuh"
+#else
 #include "utils.cuh"
+#endif
 
 namespace deep_ep {
 
@@ -305,9 +309,9 @@ __global__ void __launch_bounds__(kNumThreads, 1) dispatch(int4* recv_x,
         // NOTES: this is for distinguishing zero tokens
         if (send_warp_id_in_rank == 0 and elect_one_sync()) {
             int value = responsible_channel > 0 ? channel_prefix_matrix[responsible_rank * num_channels + responsible_channel - 1] : 0;
-            st_relaxed_sys_global(channel_start_offset.buffer(), -value - 1);
+            st_relaxed_sys_global(channel_start_offset.buffer(), -value - 1, EP_FAKE_DEP(-value - 1));
             value = channel_prefix_matrix[responsible_rank * num_channels + responsible_channel];
-            st_relaxed_sys_global(channel_end_offset.buffer(), -value - 1);
+            st_relaxed_sys_global(channel_end_offset.buffer(), -value - 1, EP_FAKE_DEP(-value - 1));
         }
         __syncwarp();
 
@@ -511,7 +515,7 @@ __global__ void __launch_bounds__(kNumThreads, 1) dispatch(int4* recv_x,
             total_offset += num_recv_tokens;
             asm volatile("bar.sync %0, %1;" ::"r"(responsible_rank), "r"(num_threads_per_rank));
             if (recv_warp_id_in_rank == num_recv_warps_per_rank - 1 and elect_one_sync())
-                st_relaxed_sys_global(channel_head_idx.buffer(), cached_channel_head_idx);
+                st_relaxed_sys_global(channel_head_idx.buffer(), cached_channel_head_idx, EP_FAKE_DEP(cached_channel_head_idx));
 
             // Exit
             num_tokens_to_recv -= num_recv_tokens;
@@ -867,7 +871,7 @@ __global__ void __launch_bounds__(kNumThreads, 1) combine(dtype_t* recv_x,
                     if (not warp_retired[i])
                         min_head = min(min_head, warp_channel_head_idx[i][lane_id]);
                 if (min_head != std::numeric_limits<int>::max() and min_head > last_head)
-                    st_relaxed_sys_global(channel_head_idx_ptr, last_head = min_head);
+                    st_relaxed_sys_global(channel_head_idx_ptr, last_head = min_head, EP_FAKE_DEP(min_head));
             }
         } else {
             // Receivers
